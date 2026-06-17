@@ -1,0 +1,112 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git remote -v)",
+      "Bash(git config --local --get:*)",
+      "Bash(git config --local --get-regexp:*)",
+      "Bash(git config user.email)",
+      "Bash(git config user.name)",
+
+      "Bash(git branch)",
+      "Bash(git branch -v)",
+      "Bash(git branch -vv)",
+      "Bash(git branch -a)",
+      "Bash(git branch -r)",
+      "Bash(git branch --show-current)",
+
+      "Bash(gh repo view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+
+      "Bash(ls)",
+      "Bash(ls -l)",
+      "Bash(ls -a)",
+      "Bash(ls -la)",
+      "Bash(ls -lah)",
+      "Bash(ls -lh)",
+
+      "Bash(file:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(comm:*)",
+      "Bash(diff:*)",
+      "Bash(md5sum:*)",
+      "Bash(sha1sum:*)",
+      "Bash(sha256sum:*)",
+
+      "PowerShell(git status)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git branch)",
+      "PowerShell(Get-ChildItem)",
+      "PowerShell(Get-ChildItem -Force)",
+      "PowerShell(Get-Content:*)",
+      "PowerShell(Get-Item:*)",
+      "PowerShell(Test-Path:*)",
+      "PowerShell(Resolve-Path:*)",
+      "PowerShell(Select-String:*)",
+      "PowerShell(Measure-Object:*)",
+      "PowerShell(Compare-Object:*)",
+      "PowerShell(Get-FileHash:*)"
+    ],
+    "deny": [
+      "Bash(git config --global:*)",
+      "Bash(git config --system:*)",
+      "PowerShell(git config --global:*)",
+      "PowerShell(git config --system:*)",
+
+      "Bash(git push --force:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git push -f:*)",
+      "PowerShell(git push --force:*)",
+      "PowerShell(git push -f:*)",
+
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)",
+      "Bash(git commit --amend:*)",
+      "Bash(git commit --author:*)",
+      "Bash(git commit --date:*)",
+
+      "Bash(git reset --hard:*)",
+      "Bash(git reset --merge:*)",
+      "Bash(git reset --keep:*)",
+      "PowerShell(git reset --hard:*)",
+
+      "Bash(git checkout --:*)",
+      "Bash(git restore --staged:*)",
+      "Bash(git clean -f:*)",
+      "Bash(git clean -fd:*)",
+      "Bash(git clean -fx:*)",
+
+      "Bash(git add -A:*)",
+      "Bash(git add --all:*)",
+      "Bash(git add . :*)",
+      "Bash(git add .)",
+
+      "Bash(rm:*)",
+      "Bash(rmdir:*)",
+      "Bash(mv:*)",
+      "PowerShell(Remove-Item:*)",
+      "PowerShell(Remove-ItemProperty:*)",
+      "PowerShell(Move-Item:*)",
+      "PowerShell(Rename-Item:*)",
+
+      "PowerShell(Invoke-Expression:*)",
+      "PowerShell(iex:*)",
+      "PowerShell(Invoke-Command:*)",
+      "PowerShell(Start-Process:*)",
+      "PowerShell(Where-Object:*)",
+      "PowerShell(ForEach-Object:*)",
+      "PowerShell(Sort-Object:*)",
+      "PowerShell(Select-Object:*)"
+    ]
+  }
+}

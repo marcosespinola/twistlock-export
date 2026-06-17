@@ -1,0 +1,98 @@
+# ============================================================
+# Sistemas operativos
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+ehthumbs.db
+ehthumbs_vista.db
+
+# ============================================================
+# Editores e IDEs
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================
+# Claude Code
+# ============================================================
+.claude/settings.local.json
+
+# ============================================================
+# Archivos temporales / borradores
+# ============================================================
+tmp/
+temp/
+draft/
+scratch/
+*.tmp
+*.bak
+*.orig
+
+# ============================================================
+# Secretos / claves / certificados (CRÍTICO)
+# ============================================================
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.cer
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.gpg
+*.asc
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.python-version
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+
+# ============================================================
+# Salidas generadas por el script
+# ============================================================
+*-export/
+
+# ============================================================
+# Datos sensibles del proyecto (info corporativa del cliente)
+# Exports de Prisma Cloud / Twistlock y bitácoras: NO versionar.
+# ============================================================
+twistlock_*.csv
+twistlock_*.json
+Bitácora*.csv
+Bitácora*.xlsx
+Bit*csv
+Bit*xlsx
+# Ficheros de bloqueo temporales de Excel (~$...)
+~$*

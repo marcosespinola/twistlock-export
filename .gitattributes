@@ -1,0 +1,34 @@
+# Default: detect text vs binary automatically and normalize EOL on commit/checkout
+* text=auto
+
+# Wordlists / archivos de payloads: forzar LF en checkout en cualquier plataforma.
+# Evita que clientes con autocrlf=true conviertan a CRLF y que linters/editores
+# trim trailing whitespace en bytes intencionales.
+*.txt text eol=lf
+
+# Scripts shell: siempre LF (Windows también, git-for-windows lo respeta).
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Archivos Windows-only: CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarios comunes (no aplicar EOL conversion).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.heic binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.tgz binary
+*.7z binary
+*.rar binary
+*.kdbx binary
+*.pcap binary
+*.pcapng binary
