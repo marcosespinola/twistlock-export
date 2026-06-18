@@ -1,7 +1,7 @@
 # twistlock-export
 
 Convierte el CSV de vulnerabilidades exportado desde **Prisma Cloud (Twistlock)**
-al formato de la **Bitácora de Vulnerabilidades corporativa**, generando tres
+al formato de la **Bitácora de Vulnerabilidades corporativa**, generando dos
 archivos listos para copy-paste.
 
 ---
@@ -11,7 +11,7 @@ archivos listos para copy-paste.
 ```
 twistlock-export/
 ├── twistlock_export.py          ← script principal
-├── requirements.txt             ← única dependencia externa
+├── requirements.txt             ← sin dependencias externas
 ├── README.md                    ← este fichero
 └── CLAUDE.md                    ← notas de arquitectura
 ```
@@ -23,57 +23,9 @@ twistlock-export/
 | Requisito | Versión mínima |
 |-----------|----------------|
 | Python    | 3.8            |
-| openpyxl  | 3.1.0          |
 
-**¿Por qué openpyxl?**
-Es la librería estándar de facto para leer y escribir ficheros `.xlsx` en Python
-sin depender de Microsoft Office. El resto del proyecto usa solo la biblioteca
-estándar de Python (`csv`, `argparse`, `re`, `collections`, `datetime`,
-`pathlib`), por lo que `openpyxl` es la **única dependencia externa**.
-
----
-
-## Instalación con entorno virtual (recomendado)
-
-Usar un entorno virtual evita conflictos con otros proyectos Python del sistema.
-
-### Windows (PowerShell)
-
-```powershell
-# 1. Crear el entorno virtual dentro del proyecto
-python -m venv .venv
-
-# 2. Activar el entorno virtual
-.\.venv\Scripts\Activate.ps1
-
-# 3. Instalar dependencias
-pip install -r requirements.txt
-
-# 4. Verificar instalación
-pip show openpyxl
-```
-
-> Si PowerShell bloquea la ejecución de scripts, ejecuta una vez:
-> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
-
-### Linux / macOS (bash/zsh)
-
-```bash
-# 1. Crear el entorno virtual
-python3 -m venv .venv
-
-# 2. Activar el entorno virtual
-source .venv/bin/activate
-
-# 3. Instalar dependencias
-pip install -r requirements.txt
-```
-
-### Desactivar el entorno virtual
-
-```bash
-deactivate
-```
+El script usa únicamente la biblioteca estándar de Python (`csv`, `argparse`,
+`re`, `collections`, `datetime`, `pathlib`). **No hay dependencias externas.**
 
 ---
 
@@ -102,7 +54,6 @@ Entradas en bitacora  : 36 (agrupadas por paquete)
 
   [TXT]  twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.txt
   [CSV]  twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
-  [XLSX] twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.xlsx
 
 Export completado en: twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02-export
 ```
@@ -111,29 +62,27 @@ Export completado en: twistlock_registry_base_image_vulns_excluded_6_15_26_13_01
 
 ## Archivos generados
 
-Los tres archivos se crean en una **carpeta nueva en el mismo directorio que el
+Los dos archivos se crean en una **carpeta nueva en el mismo directorio que el
 CSV de entrada**, cuyo nombre es el del CSV más el sufijo `-export`. Si la carpeta
 ya existe, se reutiliza y los archivos se sobreescriben.
 
 ```
 twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02-export/
 ├── twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.txt
-├── twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
-└── twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.xlsx
+└── twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
 ```
 
 | Formato | Uso recomendado |
 |---------|-----------------|
 | `.txt`  | Revisión rápida, lectura humana, adjunto a tickets (solo muestra campos con valor) |
 | `.csv`  | **Copy-paste directo a la bitácora** (separador `;`, mismo que el original) |
-| `.xlsx` | Revisión con filtros, ordenación, cabeceras coloreadas |
 
 ### Copy-paste a la bitácora
 
-El `.csv` y el `.xlsx` replican **las columnas de la bitácora en orden exacto**,
-desde la columna **A** hasta la **AH**. Anteponen 2 columnas vacías (A y B) para
-que `ID` quede en la columna **C**, igual que la bitácora. Las columnas que el
-script no rellena se generan vacías para respetar el alineamiento.
+El `.csv` replica **las columnas de la bitácora en orden exacto**, desde la
+columna **A** hasta la **AH**. Antepone 2 columnas vacías (A y B) para que `ID`
+quede en la columna **C**, igual que la bitácora. Las columnas que el script no
+rellena se generan vacías para respetar el alineamiento.
 
 **Cómo pegar:** abre el export, copia las filas de datos (sin la cabecera) y pega
 haciendo clic en la celda de la **columna A** de la primera fila libre de la
@@ -246,9 +195,9 @@ bitácora con fórmulas (`COE`, `Severity`, `Category ASVS`, `OWASP Top 10`, e `
 | `Domain` | — | Fijo: `Configuration Error` |
 | `ASVS ID` | — | Fijo: `ASVS-14.2.1` |
 | `Threat Description` | `Description` | Descripción del CVE de mayor criticidad del grupo |
-| `Details` | `CVE ID` | CVE IDs únicos del grupo (solo `CVE-*`), separados por `, ` |
+| `Details` | `CVE ID` + `Fix Status` | `La versión {ver} de {pkg} tiene los siguientes CVEs afectados:` + una línea por CVE con su parche (`CVE-xxx → actualizar a X.Y.Z` / `parche pendiente` / `sin parche disponible`) |
 | `Target` | `Id` | Igual que Hostname |
-| `Countermeasure` | `Fix Status` | `Actualizar {pkg} a versión {X}` / `Sin parche disponible` |
+| `Countermeasure` | — | `Actualizar {pkg} a la última versión vigente para solucionar los CVEs indicados.` |
 | `References` | `CVE ID` | URL canónica de NVD del CVE principal: `https://nvd.nist.gov/vuln/detail/{CVE}` |
 | `CVSS Base` | `CVSS` | Score numérico o texto según la lógica CVSS de arriba |
 | `CVSS Score` | `CVSS` | Mismo valor que `CVSS Base` |
@@ -261,5 +210,3 @@ bitácora con fórmulas (`COE`, `Severity`, `Category ASVS`, `OWASP Top 10`, e `
   lo abra correctamente sin problemas de acentos.
 - **Separador CSV:** el fichero `.csv` de salida usa `;` (punto y coma), igual
   que la bitácora original, para facilitar el copy-paste sin reconfigurar Excel.
-- **openpyxl opcional:** si no está instalado el script genera igualmente los
-  ficheros `.txt` y `.csv`; solo omite el `.xlsx` con un aviso.

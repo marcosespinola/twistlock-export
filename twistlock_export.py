@@ -5,10 +5,9 @@ twistlock_export.py
 Convierte el CSV de vulnerabilidades exportado desde Prisma Cloud (Twistlock)
 al formato de la Bitácora de Vulnerabilidades corporativa.
 
-Genera tres archivos en una carpeta <nombre_input>-export/:
+Genera dos archivos en una carpeta <nombre_input>-export/:
   - .txt   : Informe de texto legible (solo campos con valor)
   - .csv   : Columnas de la bitácora en orden, separado por ; para copy-paste
-  - .xlsx  : Excel con las columnas de la bitácora, cabeceras coloreadas
 
 Uso:
     python twistlock_export.py -i <fichero.csv>
@@ -27,14 +26,6 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
-
-try:
-    import openpyxl
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-    XLSX_AVAILABLE = True
-except ImportError:
-    XLSX_AVAILABLE = False
-
 
 CURRENT_YEAR = date.today().year
 
@@ -132,17 +123,16 @@ def get_cvss_display(cvss_score: float, cve_id: str) -> str:
     return "Sin puntuación CVSS en NVD"
 
 
-def format_countermeasure(fix_status: str, package: str) -> str:
-    """Convierte el Fix Status de Prisma en una contramedida legible."""
-    fix_status = (fix_status or "").strip()
-    if fix_status.lower().startswith("fixed in"):
-        version = fix_status[len("fixed in"):].strip()
-        return f"Actualizar {package} a versión {version}"
-    if fix_status.lower() == "deferred":
-        return "Sin parche disponible actualmente (estado: deferred)"
-    if fix_status.lower() == "needed":
-        return "Aplicar parche cuando esté disponible"
-    return fix_status
+def format_fix_label(fix_status: str) -> str:
+    """Convierte el Fix Status de Prisma en una etiqueta legible por CVE."""
+    fs = (fix_status or "").strip()
+    if fs.lower().startswith("fixed in"):
+        return f"actualizar a {fs[len('fixed in'):].strip()}"
+    if fs.lower() == "deferred":
+        return "sin parche disponible"
+    if fs.lower() in ("needed", "open"):
+        return "parche pendiente"
+    return "sin información de fix"
 
 
 def parse_csv(input_path: Path):
@@ -182,15 +172,18 @@ def group_and_build(rows: list) -> list:
         groups[key].append(row)
 
     entries = []  # (crit_rank, cvss_val, pkg, row) para ordenar al final
-    for (container_id, pkg, version), vulns in sorted(groups.items(), key=lambda x: x[0][1].lower()):
-        # CVE IDs deduplicados, solo CVE-*, preservando orden de aparición
+    for (container_id, pkg, version), vulns in groups.items():
+        # CVE IDs deduplicados, solo CVE-*, preservando orden de aparición.
+        # cve_fix: CVE ID → etiqueta de fix (primera aparición del CVE gana).
         seen = set()
         cve_ids = []
+        cve_fix = {}
         for v in vulns:
             vid = v["CVE ID"].strip()
             if is_cve(vid) and vid not in seen:
                 seen.add(vid)
                 cve_ids.append(vid)
+                cve_fix[vid] = format_fix_label(v.get("Fix Status", ""))
 
         # Pool para elegir el "CVE principal": solo CVEs si los hay.
         # Fallback defensivo: si el grupo no tuviera ningún CVE, usar todos.
@@ -231,22 +224,27 @@ def group_and_build(rows: list) -> list:
             "Domain": "Configuration Error",
             "ASVS ID": "ASVS-14.2.1",
             "Threat Description": threat,
-            "Details": ", ".join(ids_display),
+            "Details": (
+                f"La versión {version} de {pkg} tiene los siguientes CVEs afectados:\n"
+                + "\n".join(f"{cid} → {cve_fix[cid]}" for cid in cve_ids)
+                if cve_ids
+                else f"La versión {version} de {pkg} tiene los siguientes IDs afectados: {', '.join(ids_display)}."
+            ),
             "Target": container_id,
-            "Countermeasure": format_countermeasure(top.get("Fix Status", ""), pkg),
+            "Countermeasure": f"Actualizar {pkg} a la última versión vigente para solucionar los CVEs indicados.",
             "References": references,
             "CVSS Base": cvss_display,
             "CVSS Score": cvss_display,
         })
 
-        # Clave de criticidad: las entradas sin score CVSS caen al fondo
-        # (crit_rank 0), por debajo de Low. El resto usa el rango de severidad.
+        # Dos bloques: scored (CVSS > 0) primero, sin-score después.
+        # Dentro de cada bloque: sev_rank desc, CVSS desc, pkg asc.
         cvss_val = cvss_float(top)
-        crit_rank = sev_rank(top) if cvss_val > 0 else 0
-        entries.append((crit_rank, cvss_val, pkg.lower(), row))
+        no_score = 0 if cvss_val > 0 else 1
+        entries.append((no_score, sev_rank(top), cvss_val, pkg.lower(), row))
 
-    entries.sort(key=lambda e: (-e[0], -e[1], e[2]))
-    return [row for _, _, _, row in entries]
+    entries.sort(key=lambda e: (e[0], -e[1], -e[2], e[3]))
+    return [row for _, _, _, _, row in entries]
 
 
 # ---------------------------------------------------------------------------
@@ -283,73 +281,9 @@ def export_csv(rows: list, output_path: Path) -> None:
         writer = csv.writer(f, delimiter=";")
         writer.writerow(LEADING_COLS + FIELDS)
         for row in rows:
-            writer.writerow(["", ""] + [row.get(field, "") for field in FIELDS])
+            writer.writerow(LEADING_COLS + [row.get(field, "") for field in FIELDS])
     print(f"  [CSV]  {output_path.name}")
 
-
-def export_xlsx(rows: list, output_path: Path) -> None:
-    if not XLSX_AVAILABLE:
-        print("  [XLSX] OMITIDO — ejecuta: pip install openpyxl")
-        return
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Bitácora Export"
-
-    # Estilos
-    hdr_fill  = PatternFill("solid", fgColor="1F4E79")
-    hdr_font  = Font(bold=True, color="FFFFFF", size=10)
-    alt_fill  = PatternFill("solid", fgColor="DCE6F1")
-    wrap_top  = Alignment(wrap_text=True, vertical="top")
-    center    = Alignment(horizontal="center", vertical="center")
-    thin      = Side(style="thin", color="B0B0B0")
-    border    = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    # Columnas en orden de la bitácora: las 2 iniciales (A/B) + FIELDS.
-    # Offset de 2 para que "ID" quede en la columna C, igual que la bitácora.
-    all_cols = LEADING_COLS + FIELDS
-
-    # Cabecera
-    for col, field in enumerate(all_cols, 1):
-        cell = ws.cell(row=1, column=col, value=field)
-        cell.fill   = hdr_fill
-        cell.font   = hdr_font
-        cell.alignment = center
-        cell.border = border
-    ws.row_dimensions[1].height = 22
-
-    # Datos (las 2 columnas iniciales quedan vacías)
-    for row_idx, row in enumerate(rows, 2):
-        fill = alt_fill if row_idx % 2 == 0 else None
-        values = ["", ""] + [row.get(field, "") for field in FIELDS]
-        for col, value in enumerate(values, 1):
-            cell = ws.cell(row=row_idx, column=col, value=value)
-            cell.alignment = wrap_top
-            cell.border    = border
-            if fill:
-                cell.fill = fill
-        ws.row_dimensions[row_idx].height = 70
-
-    # Anchos de columna (las columnas vacías mantienen un ancho discreto)
-    col_widths = {
-        "": 4,
-        "ID": 10, "Hostname": 50, "AB": 10, "IT Development Area": 20,
-        "COE": 18, "State": 8, "Service": 14, "Origin": 18, "Network": 12,
-        "Type": 12, "Vulnerability Title": 42, "Severity": 10, "Domain": 20,
-        "Category ASVS": 14, "ASVS ID": 14, "OWASP Top 10": 22, "PCI Status": 10,
-        "Threat Description": 55, "Details": 40, "Target": 50,
-        "Detection Date": 14, "Countermeasure": 42, "Environment": 14,
-        "Production Affected?": 16, "References": 40, "CVSS Base": 16,
-        "CVSS Score": 16, "Easy of Exploit": 14, "CVSS Version": 12,
-        "CVSS Vector": 20, "Resolution Date": 14, "XX/XX/26": 12,
-    }
-    for col, field in enumerate(all_cols, 1):
-        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = col_widths.get(field, 14)
-
-    # Congelar cabecera y las 3 primeras columnas (A, B, ID) al hacer scroll
-    ws.freeze_panes = "D2"
-    wb.save(output_path)
-    print(f"  [XLSX] {output_path.name}")
 
 
 # ---------------------------------------------------------------------------
@@ -366,14 +300,12 @@ QUE HACE
 --------
   Lee el CSV de vulnerabilidades exportado desde Prisma Cloud (Twistlock),
   filtra los paquetes de sistema operativo (OS), agrupa los CVEs por paquete
-  y genera tres archivos con las columnas de la Bitacora de Vulnerabilidades
+  y genera dos archivos con las columnas de la Bitacora de Vulnerabilidades
   corporativa, listos para copy-paste.
 
 QUE NECESITA
 ------------
-  - Python 3.8 o superior
-  - Dependencia externa: openpyxl (solo para el .xlsx)
-      pip install -r requirements.txt
+  - Python 3.8 o superior (sin dependencias externas)
   - El CSV exportado desde Prisma Cloud con las columnas estandar de
     Twistlock (CVE ID, Type, Packages, Package Version, CVSS, Severity,
     Description, Fix Status, Vulnerability Link, Id).
@@ -381,17 +313,16 @@ QUE NECESITA
 QUE EXPORTA
 -----------
   Crea una carpeta en el MISMO directorio del CSV de entrada, llamada
-  <nombre_del_csv>-export/, con tres archivos (mismo nombre base):
+  <nombre_del_csv>-export/, con dos archivos (mismo nombre base):
 
     .txt   Informe legible. Solo muestra los campos con valor.
     .csv   Columnas de la bitacora en orden, separado por ; (copy-paste).
-    .xlsx  Excel con las columnas de la bitacora y cabeceras coloreadas.
 
-  El .csv y .xlsx replican las columnas de la bitacora desde la columna A
-  hasta la AH: anteponen 2 columnas vacias (A y B) para que 'ID' quede en
-  la columna C. Pega desde la columna A; las columnas no mapeadas quedan
-  vacias y respetan el alineamiento. Para conservar las formulas de la
-  bitacora, usa Pegado especial -> Omitir celdas en blanco.
+  El .csv replica las columnas de la bitacora desde la columna A hasta la AH:
+  antepone 2 columnas vacias (A y B) para que 'ID' quede en la columna C.
+  Pega desde la columna A; las columnas no mapeadas quedan vacias y respetan
+  el alineamiento. Para conservar las formulas de la bitacora, usa
+  Pegado especial -> Omitir celdas en blanco.
 
   Campos que se rellenan automaticamente:
     Hostname, State (Open), Type (Application), Vulnerability Title,
@@ -454,10 +385,9 @@ EJEMPLO
     try:
         export_txt(bitacora_rows,  output_dir / f"{stem}.txt")
         export_csv(bitacora_rows,  output_dir / f"{stem}.csv")
-        export_xlsx(bitacora_rows, output_dir / f"{stem}.xlsx")
     except PermissionError as e:
         print(f"\nERROR: no se pudo escribir '{e.filename}'.")
-        print("       Probablemente lo tienes abierto en Excel. Ciérralo y reejecuta.")
+        print("       Comprueba que el archivo no está bloqueado por otro proceso.")
         raise SystemExit(1)
 
     print(f"\nExport completado en: {output_dir}")

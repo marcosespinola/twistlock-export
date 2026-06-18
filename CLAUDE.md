@@ -15,35 +15,27 @@ python twistlock_export.py -i <fichero_twistlock.csv>
 python twistlock_export.py -h
 ```
 
-## Setup del entorno
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt   # solo instala openpyxl
-```
-
-No hay tests automatizados ni linter configurado.
+No hay dependencias externas ni tests automatizados.
 
 ## Arquitectura
 
 Un único script `twistlock_export.py` con pipeline lineal:
 
 ```
-parse_csv() -> group_and_build() -> export_txt() / export_csv() / export_xlsx()
+parse_csv() -> group_and_build() -> export_txt() / export_csv()
 ```
 
 **`parse_csv`** — lee el CSV de Twistlock con `csv.DictReader` (encoding `utf-8-sig` para BOM de Windows) y descarta todas las filas con `Type=OS`.
 
-**`group_and_build`** — clave de agrupación: `(Id, Packages, Package Version)`. Cada grupo produce una sola fila de bitácora. En `Details` se concatenan los CVE IDs **deduplicados** (preservando orden) y **filtrados a solo `CVE-*`** (se descartan GHSA/PRISMA). El **CVE principal** del grupo —mayor severidad, y a igualdad mayor CVSS (`sev_rank` + `cvss_float`)— aporta `Threat Description`, `Countermeasure`, `References` (URL NVD construida con `nvd_url`) y `CVSS Base`/`CVSS Score`. `Severity` se deja **vacío** intencionadamente: en la bitácora es una fórmula que se autocalcula desde el CVSS.
+**`group_and_build`** — clave de agrupación: `(Id, Packages, Package Version)`. Cada grupo produce una sola fila de bitácora. `Details` contiene una cabecera `"La versión {ver} de {pkg} tiene los siguientes CVEs afectados:"` seguida de una línea por CVE con su fix: `"CVE-xxx → actualizar a X.Y.Z"`, `"CVE-yyy → parche pendiente"` o `"CVE-zzz → sin parche disponible"`. La etiqueta de fix la genera `format_fix_label` a partir de `Fix Status`. Los CVE IDs están **deduplicados** (preservando orden) y **filtrados a solo `CVE-*`** (se descartan GHSA/PRISMA); si no hay CVE-* en el grupo, fallback a lista plana sin fix info. El **CVE principal** del grupo —mayor severidad, y a igualdad mayor CVSS (`sev_rank` + `cvss_float`)— aporta `Threat Description`, `References` (URL NVD construida con `nvd_url`) y `CVSS Base`/`CVSS Score`. `Countermeasure` siempre dice `"Actualizar {pkg} a la última versión vigente para solucionar los CVEs indicados."` (mensaje genérico). `Severity` se deja **vacío** intencionadamente: en la bitácora es una fórmula que se autocalcula desde el CVSS.
 
 La salida se ordena por **criticidad descendente** (Critical→Low) y, al final, las entradas sin score CVSS (`crit_rank` 0). A igualdad, por CVSS y luego nombre de paquete.
 
-**Exporters** — los tres reciben la misma lista de dicts con las claves de `FIELDS`. El TXT solo imprime campos con valor (omite las columnas vacías). El CSV/XLSX anteponen `LEADING_COLS` (2 columnas vacías) y llegan hasta `XX/XX/26` (col AH). El CSV usa `;` como separador (mismo que la bitácora); el XLSX usa `freeze_panes="D2"` y filas alternas. En `main`, los exports van en un `try/except PermissionError` que avisa si el fichero está abierto en Excel.
+**Exporters** — ambos reciben la misma lista de dicts con las claves de `FIELDS`. El TXT solo imprime campos con valor (omite las columnas vacías). El CSV antepone `LEADING_COLS` (2 columnas vacías) y llega hasta `XX/XX/26` (col AH), usando `;` como separador (mismo que la bitácora). En `main`, los exports van en un `try/except PermissionError` que avisa si el fichero está bloqueado por otro proceso.
 
 ## Decisiones de diseño importantes
 
-**Columnas alineadas a la bitácora**: `FIELDS` replica el orden exacto de la Bitácora de Vulnerabilidades corporativa (hoja `Vulnerabilities`), de `ID` hasta `XX/XX/26` (col AH, placeholder de fecha, va vacía). `LEADING_COLS` antepone 2 columnas vacías (A y B) para que `ID` quede en la columna **C**, igual que la bitácora; así el copy-paste se hace desde la columna A. El CSV/XLSX generan todas las columnas (las no mapeadas vacías). Si cambia el orden o el set de columnas de la bitácora, actualizar `FIELDS`/`LEADING_COLS` y los anchos en `col_widths` (`export_xlsx`).
+**Columnas alineadas a la bitácora**: `FIELDS` replica el orden exacto de la Bitácora de Vulnerabilidades corporativa (hoja `Vulnerabilities`), de `ID` hasta `XX/XX/26` (col AH, placeholder de fecha, va vacía). `LEADING_COLS` antepone 2 columnas vacías (A y B) para que `ID` quede en la columna **C**, igual que la bitácora; así el copy-paste se hace desde la columna A. El CSV genera todas las columnas (las no mapeadas vacías). Si cambia el orden o el set de columnas de la bitácora, actualizar `FIELDS`/`LEADING_COLS`.
 
 **Valores fijos del proyecto**: `State=Open`, `Type=Application`, `Domain=Configuration Error`, `ASVS ID=ASVS-14.2.1` están hardcodeados — son constantes para todos los exports de este proyecto (confirmado). Reutilizar el script en otro proyecto requeriría parametrizarlos.
 
