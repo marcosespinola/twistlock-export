@@ -52,6 +52,8 @@ FIELDS = [
     "ID",
     "Hostname",
     "AB",
+    "AP",
+    "TAG",
     "IT Development Area",
     "COE",
     "State",
@@ -80,7 +82,9 @@ FIELDS = [
     "CVSS Version",
     "CVSS Vector",
     "Resolution Date",
-    "XX/XX/26",  # columna AH de la bitácora (placeholder de fecha); va vacía
+    "Verificator",
+    "Start Date",
+    "Finish Date",
 ]
 
 # Columnas A y B de la bitácora, anteriores a "ID". En el CSV/XLSX se anteponen
@@ -366,15 +370,16 @@ def export_xlsx(rows: list, output_path: Path) -> None:
     # Anchos de columna (las columnas vacías mantienen un ancho discreto)
     col_widths = {
         "": 4,
-        "ID": 10, "Hostname": 50, "AB": 10, "IT Development Area": 20,
-        "COE": 18, "State": 8, "Service": 14, "Origin": 18, "Network": 12,
-        "Type": 12, "Vulnerability Title": 42, "Severity": 10, "Domain": 20,
-        "Category ASVS": 14, "ASVS ID": 14, "OWASP Top 10": 22, "PCI Status": 10,
-        "Threat Description": 55, "Details": 40, "Target": 50,
-        "Detection Date": 14, "Countermeasure": 42, "Environment": 14,
-        "Production Affected?": 16, "References": 40, "CVSS Base": 16,
-        "CVSS Score": 16, "Easy of Exploit": 14, "CVSS Version": 12,
-        "CVSS Vector": 20, "Resolution Date": 14, "XX/XX/26": 12,
+        "ID": 10, "Hostname": 50, "AB": 10, "AP": 14, "TAG": 22,
+        "IT Development Area": 20, "COE": 18, "State": 8, "Service": 14,
+        "Origin": 18, "Network": 12, "Type": 12, "Vulnerability Title": 42,
+        "Severity": 10, "Domain": 20, "Category ASVS": 14, "ASVS ID": 14,
+        "OWASP Top 10": 22, "PCI Status": 10, "Threat Description": 55,
+        "Details": 40, "Target": 50, "Detection Date": 14, "Countermeasure": 42,
+        "Environment": 14, "Production Affected?": 16, "References": 40,
+        "CVSS Base": 16, "CVSS Score": 16, "Easy of Exploit": 14,
+        "CVSS Version": 12, "CVSS Vector": 20, "Resolution Date": 14,
+        "Verificator": 14, "Start Date": 14, "Finish Date": 14,
     }
     for col, field in enumerate(all_cols, 1):
         ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = col_widths.get(field, 14)
@@ -393,77 +398,32 @@ def export_xlsx(rows: list, output_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="twistlock_export.py",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="twistlock_export - Conversor de vulnerabilidades Prisma Cloud a Bitacora corporativa",
+        description="Convierte el CSV de Prisma Cloud al formato de la Bitacora de Vulnerabilidades.",
         epilog="""\
-QUE HACE
---------
-  Lee el CSV de vulnerabilidades exportado desde Prisma Cloud (Twistlock),
-  filtra los paquetes de sistema operativo (OS), agrupa los CVEs por paquete
-  y genera un .xlsx con las columnas de la Bitacora de Vulnerabilidades
-  corporativa, listo para triaje manual y copy-paste.
+Flujo:
+  1. Ejecutar sobre el CSV de Prisma -> genera el .xlsx
+  2. Triaje manual: eliminar falsos positivos del .xlsx
+  3. Pegar filas confirmadas en la bitacora desde columna A y estirar formulas
 
-QUE NECESITA
-------------
-  - Python 3.8 o superior
-  - Dependencia externa: openpyxl (pip install -r requirements.txt)
-  - El CSV exportado desde Prisma Cloud con las columnas estandar de
-    Twistlock (CVE ID, Type, Packages, Package Version, CVSS, Severity,
-    Description, Fix Status, Vulnerability Link, Id).
+Campos autogenerados: Hostname, State, Type, Vulnerability Title, Domain,
+  ASVS ID, Threat Description, Details, Target, Countermeasure, References,
+  CVSS Base, CVSS Score. Severity se deja vacio (formula de la bitacora).
 
-QUE EXPORTA
------------
-  Crea una carpeta en el MISMO directorio del CSV de entrada, llamada
-  <nombre_del_csv>-export/, con un unico fichero <nombre_del_csv>.xlsx:
-  las columnas de la bitacora en orden, cabeceras coloreadas y texto ajustado.
-
-  El .xlsx replica las columnas de la bitacora desde la columna A hasta la AH:
-  antepone 2 columnas vacias (A y B) para que 'ID' quede en la columna C.
-
-  TRIAJE MANUAL (antes de pegar): revisa el .xlsx y valida que cada version
-  vulnerable es real y se sufre en el codigo. Las que sean falso positivo,
-  borralas del .xlsx; asi solo quedan las vulnerabilidades confirmadas.
-
-  COPY-PASTE: copia las filas confirmadas y pegalas en la bitacora desde la
-  columna A. Despues, estira (arrastra) hacia abajo las formulas propias de la
-  bitacora sobre las filas pegadas; la bitacora se autoajusta con los valores
-  copiados (ID, COE, Severity, Category ASVS, OWASP Top 10).
-
-  Campos que se rellenan automaticamente:
-    Hostname, State (Open), Type (Application), Vulnerability Title,
-    Domain (Configuration Error), ASVS ID (ASVS-14.2.1), Threat Description,
-    Details (CVEs del paquete con su fix), Target, Countermeasure, References,
-    CVSS Base, CVSS Score.
-  (Severity se deja vacio: la bitacora lo autocalcula desde el CVSS.)
-
-LOGICA DE PROCESAMIENTO
------------------------
-  - Excluye filas con Type=OS (paquetes del sistema operativo).
-  - Agrupa por (contenedor, paquete, version): 1 fila por paquete.
-  - Details: por cada CVE (deduplicado, solo CVE-*; descarta GHSA/PRISMA), su
-    version de fix segun Fix Status (actualizar a X / parche pendiente / sin
-    parche disponible).
-  - El CVE principal del grupo (mayor severidad; a igualdad, mayor CVSS)
-    aporta Threat Description, CVSS Base/Score y References.
-  - Countermeasure: mensaje generico de actualizacion (no depende del CVE).
-  - Orden de salida: primero las entradas con score CVSS (de mayor a menor),
-    luego las que no tienen score, por severidad.
-  - CVSS (con coma decimal, p.ej. 7,8):
-      > 0        -> score numerico real
-      año actual -> "Pendiente de valoracion NVD/NIST (CVE reciente)"
-      años ant.  -> "Sin puntuacion CVSS en NVD"
-
-EJEMPLO
--------
-  python twistlock_export.py -i twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
-
-  -> 335 filas totales: 171 OS (excluidas) + 164 procesadas
-  -> 36 entradas agrupadas (una por paquete vulnerable)
+Ejemplos:
+  twistlock_export.py -i vulns.csv
+  twistlock_export.py -i vulns.csv -o resultado.xlsx
+  twistlock_export.py -i vulns.csv -o C:\\exports\\proyecto.xlsx
 """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-i", "--input", required=True, metavar="CSV",
-        help="Ruta al CSV exportado desde Prisma Cloud / Twistlock",
+        help="CSV exportado desde Prisma Cloud / Twistlock",
+    )
+    parser.add_argument(
+        "-o", "--output", metavar="FICHERO.xlsx",
+        help="Ruta del .xlsx de salida (incluir extension). "
+             "Por defecto: <dir_csv>/<nombre_csv>-export/<nombre_csv>.xlsx",
     )
     args = parser.parse_args()
 
@@ -472,14 +432,19 @@ EJEMPLO
         print(f"ERROR: archivo no encontrado — {input_path}")
         raise SystemExit(1)
 
-    # La salida se crea en una carpeta nueva en el MISMO directorio del CSV de
-    # entrada, con el nombre <nombre_del_csv>-export/. Si ya existe, se reutiliza
-    # y los archivos se sobreescriben.
-    output_dir = input_path.parent / f"{input_path.stem}-export"
-    output_dir.mkdir(exist_ok=True)
+    if args.output:
+        output_path = Path(args.output)
+        if not output_path.is_absolute():
+            output_path = input_path.parent / output_path
+        output_path = output_path.resolve()
+    else:
+        output_dir = input_path.parent / f"{input_path.stem}-export"
+        output_path = output_dir / f"{input_path.stem}.xlsx"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"\nInput : {input_path.name}")
-    print(f"Output: {output_dir.name}/\n")
+    print(f"Output: {output_path}\n")
 
     rows_raw, os_count = parse_csv(input_path)
     bitacora_rows = group_and_build(rows_raw)
@@ -489,15 +454,14 @@ EJEMPLO
     print(f"Procesadas            : {len(rows_raw)}")
     print(f"Entradas en bitacora  : {len(bitacora_rows)} (agrupadas por paquete)\n")
 
-    stem = input_path.stem
     try:
-        export_xlsx(bitacora_rows, output_dir / f"{stem}.xlsx")
+        export_xlsx(bitacora_rows, output_path)
     except PermissionError as e:
         print(f"\nERROR: no se pudo escribir '{e.filename}'.")
         print("       Probablemente lo tienes abierto en Excel. Ciérralo y reejecuta.")
         raise SystemExit(1)
 
-    print(f"\nExport completado en: {output_dir}")
+    print(f"\nExport completado en: {output_path.parent}")
 
 
 if __name__ == "__main__":

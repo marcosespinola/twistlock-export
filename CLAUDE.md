@@ -11,8 +11,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Instalar dependencia (solo openpyxl)
 pip install -r requirements.txt
 
-# Ejecutar
+# Ejecutar (salida por defecto: <dir_csv>/<nombre_csv>-export/<nombre_csv>.xlsx)
 python twistlock_export.py -i <fichero_twistlock.csv>
+
+# Ejecutar con nombre de salida personalizado (incluir .xlsx)
+python twistlock_export.py -i <fichero_twistlock.csv> -o mi_export.xlsx
 
 # Ver ayuda completa
 python twistlock_export.py -h
@@ -47,7 +50,7 @@ parse_csv() -> group_and_build() -> export_xlsx()
 
 ## Decisiones de diseño importantes
 
-**Columnas alineadas a la bitácora**: `FIELDS` replica el orden exacto de la Bitácora de Vulnerabilidades corporativa (hoja `Vulnerabilities`), de `ID` hasta `XX/XX/26` (col AH, placeholder de fecha, va vacía). `LEADING_COLS` antepone 2 columnas vacías (A y B) para que `ID` quede en la columna **C**, igual que la bitácora; así el copy-paste se hace desde la columna A. Si cambia el orden o el set de columnas de la bitácora, actualizar `FIELDS`/`LEADING_COLS` y los anchos en `col_widths` (`export_xlsx`).
+**Columnas alineadas a la bitácora**: `FIELDS` replica el orden exacto de la Bitácora de Vulnerabilidades corporativa (hoja `Vulnerabilities`), de `ID` (col C) hasta `Finish Date` (col AL). `LEADING_COLS` antepone 2 columnas vacías (A y B) para que `ID` quede en la columna **C**, igual que la bitácora; así el copy-paste se hace desde la columna A. Si cambia el orden o el set de columnas de la bitácora, actualizar `FIELDS`/`LEADING_COLS` y los anchos en `col_widths` (`export_xlsx`).
 
 **Identidad de la imagen (`image_ref`)**: `Hostname`/`Target` se reconstruyen desde `Registry/Repository:Tag` y NO desde `Id`, porque `Id` es el digest `sha256:...` en los export de scope `images`. Registry/Repository/Tag están en ambos scopes; si faltaran, fallback a `Id`.
 
@@ -55,7 +58,7 @@ parse_csv() -> group_and_build() -> export_xlsx()
 
 **Countermeasure genérica**: se eligió un mensaje fijo (no derivado del Fix Status) para "no pillarse los dedos": el detalle de versiones de fix por CVE ya vive en `Details`, y un mensaje genérico no afirma que exista parche cuando algún CVE es `deferred`/sin fix.
 
-**Columnas con fórmula en la bitácora (NO rellenar)**: la hoja `Vulnerabilities` autocalcula 5 columnas; el export las deja **vacías** a propósito para no pisarlas. Al pegar y **estirar las fórmulas** de la bitácora sobre las filas nuevas, se recalculan solas: `C` ID (`=CONCATENATE("<PREFIJO>_"...ROW())`), `G` COE (VLOOKUP de IT Development Area), `N` Severity (IF sobre CVSS Score), `P` Category ASVS (VLOOKUP de ASVS ID), `R` OWASP Top 10 (VLOOKUP de ASVS ID). Por eso el script rellena `ASVS ID` y `CVSS Base/Score` (que alimentan esas fórmulas) pero deja vacíos `Severity`, `Category ASVS`, `OWASP Top 10`, `COE` e `ID`.
+**Columnas con fórmula en la bitácora (NO rellenar)**: la hoja `Vulnerabilities` autocalcula 5 columnas; el export las deja **vacías** a propósito para no pisarlas. Al pegar y **estirar las fórmulas** de la bitácora sobre las filas nuevas, se recalculan solas: `C` ID (`=CONCATENATE("<PREFIJO>_"...ROW())`), `I` COE (VLOOKUP de IT Development Area), `P` Severity (IF sobre CVSS Score), `R` Category ASVS (VLOOKUP de ASVS ID), `T` OWASP Top 10 (VLOOKUP de ASVS ID). Por eso el script rellena `ASVS ID` y `CVSS Base/Score` (que alimentan esas fórmulas) pero deja vacíos `Severity`, `Category ASVS`, `OWASP Top 10`, `COE` e `ID`.
 
 **Deduplicación de CVEs**: Prisma emite una fila por cada `Package Path` donde aparece el paquete. Un mismo paquete en N ficheros `.deps.json` repite cada CVE N veces. `group_and_build` deduplica con un `set` + lista ordenada. Sin esto, `Details` sale con CVEs repetidos.
 
@@ -63,7 +66,7 @@ parse_csv() -> group_and_build() -> export_xlsx()
 
 **Encoding en Windows**: La consola de Windows usa cp1251 por defecto, que no soporta caracteres españoles ni símbolos Unicode. El script reconfigura `sys.stdout` y `sys.stderr` a UTF-8 al inicio. Los strings del argparse `--help` deben evitar caracteres fuera de ASCII (sin `→`, `━`, `é`, `ó`, etc.) porque argparse escribe directamente a stdout antes de que la reconfiguración pueda actuar en algunos contextos.
 
-**Carpeta de salida**: Siempre `{stem_del_input}-export/` junto al CSV de entrada. Si ya existe, se reutiliza y el `.xlsx` se sobreescribe.
+**Salida**: Sin `-o`, crea `{stem_del_input}-export/{stem_del_input}.xlsx` junto al CSV de entrada. Con `-o <ruta.xlsx>`, escribe directamente en la ruta indicada (relativa al directorio del CSV si no es absoluta); crea directorios intermedios si no existen. En ambos casos sobreescribe si ya existe.
 
 ## Columnas esperadas en el CSV de entrada
 

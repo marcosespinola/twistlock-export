@@ -45,23 +45,28 @@ pip install -r requirements.txt
 ## Uso
 
 ```powershell
+# Salida por defecto: <dir_csv>/<nombre_csv>-export/<nombre_csv>.xlsx
 python twistlock_export.py -i <ruta_al_csv_de_prisma>
+
+# Salida con nombre personalizado (incluir la extensión .xlsx)
+python twistlock_export.py -i <ruta_al_csv_de_prisma> -o mi_export.xlsx
+python twistlock_export.py -i <ruta_al_csv_de_prisma> -o C:\exports\proyecto.xlsx
 ```
 
 **Salida esperada en consola:**
 
 ```
 Input : <fichero>.csv
-Output: <fichero>-export/
+Output: C:\...\<fichero>-export\<fichero>.xlsx
 
-Filas en el CSV       : 335
-Excluidas (OS)        : 171
-Procesadas            : 164
-Entradas en bitacora  : 36 (agrupadas por paquete)
+Filas en el CSV       : 440
+Excluidas (OS)        : 275
+Procesadas            : 165
+Entradas en bitacora  : 24 (agrupadas por paquete)
 
   [XLSX] <fichero>.xlsx
 
-Export completado en: <fichero>-export
+Export completado en: C:\...\<fichero>-export
 ```
 
 Funciona con los dos scopes de export de Prisma (`registry` e `images`): ver
@@ -77,10 +82,11 @@ Funciona con los dos scopes de export de Prisma (`registry` e `images`): ver
 
 ### 1. Generar el `.xlsx`
 
-Se crea una carpeta `<nombre_del_csv>-export/` en el mismo directorio del CSV de
-entrada, con un único fichero `<nombre_del_csv>.xlsx`: las columnas de la
-bitácora en orden, cabeceras coloreadas y texto ajustado. Si la carpeta ya
-existe, se reutiliza y el fichero se sobreescribe.
+Sin `-o`, se crea la carpeta `<nombre_del_csv>-export/` junto al CSV de entrada
+con un fichero `<nombre_del_csv>.xlsx`. Con `-o` se escribe directamente en la
+ruta indicada, creando los directorios intermedios si fuera necesario. En ambos
+casos las columnas van en orden, con cabeceras coloreadas y texto ajustado. Si
+el fichero ya existe, se sobreescribe.
 
 ### 2. Triaje manual (antes de pegar)
 
@@ -98,7 +104,7 @@ Así, tras el triaje, en el `.xlsx` solo quedan las vulnerabilidades **confirmad
 ### 3. Copy-paste a la bitácora
 
 El `.xlsx` replica **las columnas de la bitácora en orden exacto**, desde la
-columna **A** hasta la **AH**. Antepone 2 columnas vacías (A y B) para que `ID`
+columna **A** hasta la **AL**. Antepone 2 columnas vacías (A y B) para que `ID`
 quede en la columna **C**, igual que la bitácora.
 
 1. Copia las filas confirmadas del `.xlsx` (sin la cabecera).
@@ -117,10 +123,10 @@ solas:
 | Col | Campo | Se calcula desde |
 |-----|-------|------------------|
 | C | ID | nº de fila (`ROW()`) |
-| G | COE | IT Development Area |
-| N | Severity | CVSS Score |
-| P | Category ASVS | ASVS ID |
-| R | OWASP Top 10 | ASVS ID |
+| I | COE | IT Development Area |
+| P | Severity | CVSS Score |
+| R | Category ASVS | ASVS ID |
+| T | OWASP Top 10 | ASVS ID |
 
 ---
 
@@ -182,7 +188,7 @@ Description` y `References`.
 
 ## Mapeo de campos
 
-El export genera **todas las columnas de la bitácora** (de `ID` hasta `XX/XX/26`).
+El export genera **todas las columnas de la bitácora** (de `ID` hasta `Finish Date`).
 Las que no aparecen abajo se generan **vacías**: unas las rellenas a mano y otras
 las autocalcula la bitácora con fórmulas (ver "Columnas con fórmula").
 
@@ -204,12 +210,3 @@ las autocalcula la bitácora con fórmulas (ver "Columnas con fórmula").
 | `CVSS Base` | `CVSS` | Score numérico o texto según la lógica CVSS de arriba |
 | `CVSS Score` | `CVSS` | Mismo valor que `CVSS Base` |
 
----
-
-## Notas
-
-- **Encoding:** el `.xlsx` lo genera `openpyxl`; los textos van en UTF-8 sin
-  problemas de acentos.
-- **Fichero abierto en Excel:** si el `.xlsx` de salida está abierto, el script
-  avisa con un `PermissionError` controlado; ciérralo y reejecuta.
-- **Columnas esperadas en el CSV:** ver `CLAUDE.md`.
