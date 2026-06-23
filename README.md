@@ -1,8 +1,8 @@
 # twistlock-export
 
 Convierte el CSV de vulnerabilidades exportado desde **Prisma Cloud (Twistlock)**
-al formato de la **Bitácora de Vulnerabilidades corporativa**, generando dos
-archivos listos para copy-paste.
+al formato de la **Bitácora de Vulnerabilidades corporativa**, generando un
+fichero `.xlsx` listo para triaje manual y copy-paste.
 
 ---
 
@@ -11,7 +11,7 @@ archivos listos para copy-paste.
 ```
 twistlock-export/
 ├── twistlock_export.py          ← script principal
-├── requirements.txt             ← sin dependencias externas
+├── requirements.txt             ← dependencia: openpyxl
 ├── README.md                    ← este fichero
 └── CLAUDE.md                    ← notas de arquitectura
 ```
@@ -23,9 +23,22 @@ twistlock-export/
 | Requisito | Versión mínima |
 |-----------|----------------|
 | Python    | 3.8            |
+| openpyxl  | 3.1.0          |
 
-El script usa únicamente la biblioteca estándar de Python (`csv`, `argparse`,
-`re`, `collections`, `datetime`, `pathlib`). **No hay dependencias externas.**
+`openpyxl` es la única dependencia externa (genera el `.xlsx`). El resto del
+script usa solo la biblioteca estándar (`csv`, `argparse`, `re`, `collections`,
+`datetime`, `pathlib`).
+
+### Instalación con entorno virtual (recomendado)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+> Si PowerShell bloquea la ejecución de scripts:
+> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
 ---
 
@@ -35,63 +48,71 @@ El script usa únicamente la biblioteca estándar de Python (`csv`, `argparse`,
 python twistlock_export.py -i <ruta_al_csv_de_prisma>
 ```
 
-**Ejemplo con el fichero de este proyecto:**
-
-```powershell
-python twistlock_export.py -i "twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv"
-```
-
 **Salida esperada en consola:**
 
 ```
-Input : twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
-Output: twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02-export/
+Input : <fichero>.csv
+Output: <fichero>-export/
 
 Filas en el CSV       : 335
 Excluidas (OS)        : 171
 Procesadas            : 164
 Entradas en bitacora  : 36 (agrupadas por paquete)
 
-  [TXT]  twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.txt
-  [CSV]  twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
+  [XLSX] <fichero>.xlsx
 
-Export completado en: twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02-export
+Export completado en: <fichero>-export
 ```
+
+Funciona con los dos scopes de export de Prisma (`registry` e `images`): ver
+[Identidad de la imagen](#identidad-de-la-imagen-registry-vs-images).
 
 ---
 
-## Archivos generados
-
-Los dos archivos se crean en una **carpeta nueva en el mismo directorio que el
-CSV de entrada**, cuyo nombre es el del CSV más el sufijo `-export`. Si la carpeta
-ya existe, se reutiliza y los archivos se sobreescriben.
+## Flujo de trabajo (importante)
 
 ```
-twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02-export/
-├── twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.txt
-└── twistlock_registry_base_image_vulns_excluded_6_15_26_13_01_02.csv
+1. Ejecutar  ──►  2. TRIAJE MANUAL del .xlsx  ──►  3. Copy-paste a la bitácora
 ```
 
-| Formato | Uso recomendado |
-|---------|-----------------|
-| `.txt`  | Revisión rápida, lectura humana, adjunto a tickets (solo muestra campos con valor) |
-| `.csv`  | **Copy-paste directo a la bitácora** (separador `;`, mismo que el original) |
+### 1. Generar el `.xlsx`
 
-### Copy-paste a la bitácora
+Se crea una carpeta `<nombre_del_csv>-export/` en el mismo directorio del CSV de
+entrada, con un único fichero `<nombre_del_csv>.xlsx`: las columnas de la
+bitácora en orden, cabeceras coloreadas y texto ajustado. Si la carpeta ya
+existe, se reutiliza y el fichero se sobreescribe.
 
-El `.csv` replica **las columnas de la bitácora en orden exacto**, desde la
+### 2. Triaje manual (antes de pegar)
+
+**El export es un punto de partida, no la verdad absoluta.** Antes de pegar nada
+en la bitácora hay que validar cada fila:
+
+- Comprobar que la **versión vulnerable es real y se sufre en el código** (que el
+  paquete y la versión detectados se usan de verdad y la vulnerabilidad aplica al
+  contexto de la aplicación).
+- Si una entrada es un **falso positivo**, se **elimina la fila del `.xlsx`**.
+
+Así, tras el triaje, en el `.xlsx` solo quedan las vulnerabilidades **confirmadas**
+(positivos reales).
+
+### 3. Copy-paste a la bitácora
+
+El `.xlsx` replica **las columnas de la bitácora en orden exacto**, desde la
 columna **A** hasta la **AH**. Antepone 2 columnas vacías (A y B) para que `ID`
-quede en la columna **C**, igual que la bitácora. Las columnas que el script no
-rellena se generan vacías para respetar el alineamiento.
+quede en la columna **C**, igual que la bitácora.
 
-**Cómo pegar:** abre el export, copia las filas de datos (sin la cabecera) y pega
-haciendo clic en la celda de la **columna A** de la primera fila libre de la
-bitácora. Cada valor cae en su columna.
+1. Copia las filas confirmadas del `.xlsx` (sin la cabecera).
+2. Pégalas en la bitácora haciendo clic en la celda de la **columna A** de la
+   primera fila libre. Cada valor cae en su columna.
+3. **Estira (arrastra) hacia abajo las fórmulas propias de la bitácora** sobre
+   las filas recién pegadas. La bitácora se autoajusta y recalcula sus columnas
+   con fórmula a partir de los valores copiados.
 
-### ⚠️ Respetar las fórmulas de la bitácora
+### Columnas con fórmula de la bitácora
 
-La hoja `Vulnerabilities` de la bitácora **autocalcula 5 columnas con fórmulas**.
-El export las deja **vacías a propósito** para no pisarlas:
+La hoja `Vulnerabilities` **autocalcula 5 columnas**. El export las deja **vacías
+a propósito**; al estirar las fórmulas sobre las filas pegadas, se recalculan
+solas:
 
 | Col | Campo | Se calcula desde |
 |-----|-------|------------------|
@@ -101,65 +122,51 @@ El export las deja **vacías a propósito** para no pisarlas:
 | P | Category ASVS | ASVS ID |
 | R | OWASP Top 10 | ASVS ID |
 
-Si pegas normal, las celdas vacías del export **borran** esas fórmulas. Para
-conservarlas:
-
-1. Asegúrate de que las filas destino ya tienen las fórmulas (arrástralas hacia
-   abajo desde una fila existente si vas a usar filas nuevas).
-2. Copia las filas de datos del export.
-3. En la bitácora, **botón derecho → Pegado especial → marca "Omitir celdas en
-   blanco"** → Aceptar.
-
-Así las columnas vacías del export no sobreescriben las fórmulas, y estas
-recalculan solas con los datos que sí se pegan (Severity desde el CVSS, Category
-ASVS y OWASP desde el ASVS ID, etc.).
-
 ---
 
 ## Lógica de procesamiento
 
 ### 1. Filtrado de tipos
 
-Se excluyen todas las filas con `Type = OS` (paquetes del sistema operativo).
-Solo se procesan:
-
-| Tipo Prisma | Descripción |
-|-------------|-------------|
-| `python`    | Paquetes Python (pip/wheels) |
-| `nuget`     | Paquetes .NET / NuGet |
-| `Application` | Vulnerabilidades a nivel de aplicación |
+Se excluyen todas las filas con `Type = OS` (paquetes del sistema operativo). Se
+procesan el resto de tipos (p. ej. `python`, `nuget`, `java`, `Application`),
+según lo que contenga la imagen escaneada.
 
 ### 2. Agrupación por paquete
 
-Las filas se agrupan por `(contenedor, paquete, versión)`. Cada grupo genera
-**una sola fila** en la bitácora. Los CVEs del grupo se listan juntos en el
-campo `Details`, **deduplicados** y preservando el orden de aparición.
+Las filas se agrupan por `(imagen, paquete, versión)`. Cada grupo genera **una
+sola fila** en la bitácora. Los CVEs del grupo se listan en `Details`,
+**deduplicados** y preservando el orden de aparición.
 
 > La deduplicación es necesaria porque Prisma repite el mismo CVE una vez por
-> cada ruta de fichero (`Package Path`) donde detecta el paquete. Sin dedup,
-> un paquete presente en 4 ficheros `.deps.json` listaría cada CVE 4 veces.
+> cada ruta de fichero (`Package Path`) donde detecta el paquete.
 
-**Filtro de identificadores:** en `Details` solo se incluyen identificadores
-`CVE-*`. Los `GHSA-*` (GitHub Security Advisory) y `PRISMA-*` se descartan.
+**Filtro de identificadores:** solo se incluyen `CVE-*`. Los `GHSA-*` y
+`PRISMA-*` se descartan.
 
-**Orden de salida:** las entradas se ordenan por criticidad descendente
-(Critical → High → Medium → Low) y, al final, las que no tienen score CVSS
-(CVEs recientes sin valorar / informativas). A igualdad de criticidad se ordena
-por CVSS descendente.
+**Orden de salida:** primero las entradas con score CVSS (de mayor a menor) y,
+después, las que no tienen score, ordenadas por severidad. Así una Critical/High
+con CVSS=0 no queda enterrada bajo entradas Low.
 
-**Ejemplo:**  
-`libxml2 2.9.10` tiene 17 CVEs en Prisma → 1 fila en la bitácora con todos los
-CVE IDs (únicos) en Details, y el título
-`Múltiples CVEs en libxml2 (2.9.10+dfsg-5ubuntu0.20.04.8)`.
+### 3. Identidad de la imagen (`registry` vs `images`)
 
-Cuando el grupo tiene un único CVE, el título usa ese CVE directamente:
-`CVE-2024-0056 en system.data.sqlclient (4.8.5)`.
+El campo `Hostname`/`Target` es la **ruta legible de la imagen**, reconstruida
+desde `Registry` + `Repository` + `:` + `Tag` (con fallback al campo `Id` si
+faltaran). Esto es necesario porque el campo `Id` no es uniforme entre scopes:
 
-### 3. Lógica CVSS
+| Scope de export | Valor de `Id` |
+|-----------------|---------------|
+| `registry`      | ruta completa de la imagen |
+| `images`        | digest `sha256:...` |
+
+Reconstruir desde `Registry/Repository:Tag` da una identidad legible y coherente
+en ambos formatos.
+
+### 4. Lógica CVSS
 
 Los campos `CVSS Base` y `CVSS Score` corresponden al **CVE principal** del grupo
-(mayor severidad; a igualdad, mayor CVSS). El mismo CVE aporta `Severity`,
-`Threat Description` y `References`, de modo que todos son coherentes entre sí.
+(mayor severidad; a igualdad, mayor CVSS). El mismo CVE aporta `Threat
+Description` y `References`.
 
 | Situación | Valor en bitácora |
 |-----------|-------------------|
@@ -167,37 +174,32 @@ Los campos `CVSS Base` y `CVSS Score` corresponden al **CVE principal** del grup
 | CVSS = 0 y CVE del año en curso | `Pendiente de valoración NVD/NIST (CVE reciente)` |
 | CVSS = 0 y CVE de años anteriores | `Sin puntuación CVSS en NVD` |
 
-> **Nota:** Prisma Cloud exporta un único score numérico sin indicar la versión
-> de CVSS (2.0, 3.1 o 4.0). Los scores del export son CVSS 3.1 (estándar NVD).
-> La bitácora original usa CVSS 4.0 con vector completo — ese vector no está
-> disponible en el CSV de Prisma y debe rellenarse manualmente si se requiere.
+> **Nota:** Prisma exporta un único score numérico sin indicar la versión de CVSS
+> (2.0 / 3.1 / 4.0) ni el vector. El vector CVSS (que la bitácora usa con CVSS
+> 4.0) **no está en el CSV de Prisma** y debe consultarse en NVD si se requiere.
 
 ---
 
 ## Mapeo de campos
 
-El export genera **todas las columnas de la bitácora** (de `ID` hasta la columna
-`XX/XX/26`). Las que no aparecen abajo se generan **vacías**: unas las rellenas a
-mano (`AB`, `IT Development Area`, `Service`, `Origin`, `Network`, `PCI Status`,
-`Detection Date`, `Environment`, `Production Affected?`, `Easy of Exploit`,
-`CVSS Version`, `CVSS Vector`, `Resolution Date`) y otras las autocalcula la
-bitácora con fórmulas (`COE`, `Severity`, `Category ASVS`, `OWASP Top 10`, e `ID`
-— ver sección "Respetar las fórmulas").
+El export genera **todas las columnas de la bitácora** (de `ID` hasta `XX/XX/26`).
+Las que no aparecen abajo se generan **vacías**: unas las rellenas a mano y otras
+las autocalcula la bitácora con fórmulas (ver "Columnas con fórmula").
 
 | Campo bitácora | Origen | Lógica |
 |----------------|--------|--------|
-| `ID` | — | Vacío (rellenar manualmente con el patrón de ID de la bitácora) |
-| `Hostname` | `Id` | Ruta completa de la imagen del contenedor |
+| `ID` | — | Vacío (lo autocalcula la fórmula de la bitácora) |
+| `Hostname` | `Registry`/`Repository`/`Tag` | Ruta legible de la imagen (`registro/repo:tag`) |
 | `State` | — | Fijo: `Open` |
 | `Type` | — | Fijo: `Application` |
 | `Vulnerability Title` | `Packages` + `CVE ID` | `Múltiples CVEs en {pkg} ({ver})` o `{CVE} en {pkg} ({ver})` |
-| `Severity` | — | **Vacío** (la bitácora lo autocompleta a partir del CVSS) |
+| `Severity` | — | **Vacío** (la bitácora lo autocompleta desde el CVSS) |
 | `Domain` | — | Fijo: `Configuration Error` |
 | `ASVS ID` | — | Fijo: `ASVS-14.2.1` |
-| `Threat Description` | `Description` | Descripción del CVE de mayor criticidad del grupo |
-| `Details` | `CVE ID` + `Fix Status` | `La versión {ver} de {pkg} tiene los siguientes CVEs afectados:` + una línea por CVE con su parche (`CVE-xxx → actualizar a X.Y.Z` / `parche pendiente` / `sin parche disponible`) |
-| `Target` | `Id` | Igual que Hostname |
-| `Countermeasure` | — | `Actualizar {pkg} a la última versión vigente para solucionar los CVEs indicados.` |
+| `Threat Description` | `Description` | Descripción del CVE de mayor criticidad del grupo (texto de Prisma) |
+| `Details` | `CVE ID` + `Fix Status` | Cabecera + una línea por CVE con su fix (`CVE-xxx → actualizar a X.Y.Z` / `parche pendiente` / `sin parche disponible`) |
+| `Target` | `Registry`/`Repository`/`Tag` | Igual que Hostname |
+| `Countermeasure` | — | Genérico: `Se recomienda actualizar {pkg} a la última versión disponible del proveedor y revisar las versiones de corrección indicadas en Details.` |
 | `References` | `CVE ID` | URL canónica de NVD del CVE principal: `https://nvd.nist.gov/vuln/detail/{CVE}` |
 | `CVSS Base` | `CVSS` | Score numérico o texto según la lógica CVSS de arriba |
 | `CVSS Score` | `CVSS` | Mismo valor que `CVSS Base` |
@@ -206,7 +208,8 @@ bitácora con fórmulas (`COE`, `Severity`, `Category ASVS`, `OWASP Top 10`, e `
 
 ## Notas
 
-- **Encoding:** el CSV de salida usa UTF-8 con BOM (`utf-8-sig`) para que Excel
-  lo abra correctamente sin problemas de acentos.
-- **Separador CSV:** el fichero `.csv` de salida usa `;` (punto y coma), igual
-  que la bitácora original, para facilitar el copy-paste sin reconfigurar Excel.
+- **Encoding:** el `.xlsx` lo genera `openpyxl`; los textos van en UTF-8 sin
+  problemas de acentos.
+- **Fichero abierto en Excel:** si el `.xlsx` de salida está abierto, el script
+  avisa con un `PermissionError` controlado; ciérralo y reejecuta.
+- **Columnas esperadas en el CSV:** ver `CLAUDE.md`.

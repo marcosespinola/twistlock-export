@@ -1,3 +1,10 @@
-# twistlock-export no tiene dependencias externas.
-# Usa únicamente la biblioteca estándar de Python:
-# csv, argparse, re, collections, datetime, pathlib.
+# Dependencias de twistlock-export
+#
+# openpyxl — generación del fichero .xlsx de salida (único formato de export).
+# El resto del proyecto usa solo la biblioteca estándar de Python
+# (csv, argparse, re, collections, datetime, pathlib).
+#
+# Instalación en entorno virtual (ver README.md):
+#   pip install -r requirements.txt
+
+openpyxl>=3.1.0
